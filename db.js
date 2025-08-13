@@ -23,7 +23,6 @@ function createPool() {
 function initDb() {
   pool = createPool();
 
-  // Keep-alive
   setInterval(async () => {
     try {
       await pool.query('SELECT 1');
@@ -40,7 +39,17 @@ function initDb() {
 
 initDb();
 
-module.exports = {
-  query: (...args) => pool.query(...args),
-  getPool: () => pool
-};
+async function queryWithReconnect(sql, params) {
+  try {
+    return await pool.query(sql, params);
+  } catch (err) {
+    if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+      console.warn('⚠️ MySQL connection lost, reconnecting...');
+      pool = createPool();
+      return await pool.query(sql, params); // retry once
+    }
+    throw err;
+  }
+}
+
+module.exports = { query: queryWithReconnect };
